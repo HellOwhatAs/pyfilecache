@@ -1,0 +1,5 @@
+/build
+/dist
+/pyfilecache.egg-info
+__pycache__
+__pyfilecache__
