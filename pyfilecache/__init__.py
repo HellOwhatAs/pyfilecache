@@ -2,7 +2,10 @@ from io import TextIOWrapper
 from pathlib import Path
 from typing import Any, Hashable, Callable, Dict
 from functools import _make_key, partial
-import pickle, inspect, threading, shutil
+import pickle, inspect, shutil
+import filelock
+
+__all__ = ['file_cache']
 
 CACHE_DIR = '__pyfilecache__'
 
@@ -14,8 +17,6 @@ class _FileCached:
             writer: Callable[[Any, TextIOWrapper], None],
             typed: bool = False
     ):
-        self.lock = threading.Lock()
-
         self.reader, self.writer = reader, writer
         self.typed = typed
         self.user_function = user_function
@@ -35,20 +36,23 @@ class _FileCached:
         if not self.index_dir.exists():
             with open(self.index_dir, 'wb') as f:
                 pickle.dump({}, f)
+        self.lock_dir = self.index_dir.parent.joinpath('lock')
+        self.lock = filelock.FileLock(self.lock_dir)
 
     def __call__(self, *args, **kwds):
         """
         wrapper of user_function
         """
         fidxp = self.fp(*args, **kwds)
-        if fidxp.exists():
-            with open(fidxp, 'rb') as f:
-                return self.reader(f)
-        else:
-            result = self.user_function(*args, **kwds)
+        with self.lock:
+            if fidxp.exists():
+                with open(fidxp, 'rb') as f:
+                    return self.reader(f)
+        result = self.user_function(*args, **kwds)
+        with self.lock:
             with open(fidxp, 'wb') as f:
                 self.writer(result, f)
-            return result
+        return result
         
     def fp(self, *args, **kwds):
         """
@@ -59,8 +63,7 @@ class _FileCached:
         return self.funcache_dir.joinpath(f'_{idx}')
 
     def _key2findex(self, key: Hashable) -> int:
-        self.lock.acquire()
-        try:
+        with self.lock:
             with open(self.index_dir, "rb") as f:
                 index: Dict[Any, int] = pickle.load(f)
             result = index.get(key)
@@ -68,15 +71,14 @@ class _FileCached:
                 with open(self.index_dir, "wb") as f:
                     index[key] = len(index)
                     pickle.dump(index, f)
-        finally:
-            self.lock.release()
         return index[key]
     
     def clear(self):
         """
         clear all stored results of this function
         """
-        shutil.rmtree(self.funcache_dir)
+        with self.lock:
+            for fp in self.funcache_dir.glob('_*'): fp.unlink()
         self._build()
 
 def file_cache(

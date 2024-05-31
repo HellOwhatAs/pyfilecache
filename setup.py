@@ -2,9 +2,11 @@ from setuptools import setup, find_packages
 
 setup(
     name="pyfilecache",
-    version="0.1.2",
+    version="0.1.3",
     packages=find_packages(),
-    install_requires=[],
+    install_requires=[
+        'filelock'
+    ],
     author="HellOwhatAs",
     author_email="xjq701229@outlook.com",
     description="cache results of slow function to disk",
