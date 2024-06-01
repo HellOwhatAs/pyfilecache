@@ -12,7 +12,7 @@ CACHE_DIR = '__pyfilecache__'
 class _FileCached:
     def __init__(
             self,
-            user_function,
+            user_function: Callable,
             reader: Callable[[TextIOWrapper], Any],
             writer: Callable[[Any, TextIOWrapper], None],
             typed: bool = False,
@@ -60,7 +60,8 @@ class _FileCached:
         """
         the file path where the result of user_function(*args, **kwds) stored
         """
-        key = tuple(_make_key((self.user_function.__code__.co_code, *args), kwds, self.typed))
+        func_identifier = (inspect.signature(self.user_function), self.user_function.__code__.co_code)
+        key = tuple(_make_key((func_identifier, *args), kwds, self.typed))
         idx = self._key2findex(key)
         return self.funcache_dir.joinpath(f'{self.version}_{idx}')
 
@@ -93,7 +94,7 @@ class _FileCached:
         return _FileCached(self.user_function, self.reader, self.writer, self.typed, version)
 
 def file_cache(
-    user_function = None, *,
+    user_function: Callable = None, *,
     reader: Callable[[TextIOWrapper], Any] = pickle.load,
     writer: Callable[[Any, TextIOWrapper], None] = pickle.dump,
     typed: bool = False
