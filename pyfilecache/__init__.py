@@ -2,7 +2,7 @@ from io import TextIOWrapper
 from pathlib import Path
 from typing import Any, Hashable, Callable, Dict
 from functools import _make_key, partial
-import pickle, inspect, shutil
+import pickle, inspect
 import filelock
 
 __all__ = ['file_cache']
@@ -15,11 +15,13 @@ class _FileCached:
             user_function,
             reader: Callable[[TextIOWrapper], Any],
             writer: Callable[[Any, TextIOWrapper], None],
-            typed: bool = False
+            typed: bool = False,
+            version: str = None
     ):
         self.reader, self.writer = reader, writer
         self.typed = typed
         self.user_function = user_function
+        self._version = version
 
         self._build()
 
@@ -60,7 +62,7 @@ class _FileCached:
         """
         key = tuple(_make_key((self.user_function.__code__.co_code, *args), kwds, self.typed))
         idx = self._key2findex(key)
-        return self.funcache_dir.joinpath(f'_{idx}')
+        return self.funcache_dir.joinpath(f'{self.version}_{idx}')
 
     def _key2findex(self, key: Hashable) -> int:
         with self.lock:
@@ -78,8 +80,17 @@ class _FileCached:
         clear all stored results of this function
         """
         with self.lock:
-            for fp in self.funcache_dir.glob('_*'): fp.unlink()
+            for fp in self.funcache_dir.glob(f'{self.version}_*'): fp.unlink()
         self._build()
+
+    @property
+    def version(self):
+        return "" if self._version is None else self._version
+    
+    def __getitem__(self, version: str):
+        if self._version is not None: raise RuntimeError(f'overwriting the existing version {self.version} with {version}')
+        if not (isinstance(version, str) and version.isalnum()): raise TypeError('version indices must be str that satisfy isalnum')
+        return _FileCached(self.user_function, self.reader, self.writer, self.typed, version)
 
 def file_cache(
     user_function = None, *,

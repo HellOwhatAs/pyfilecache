@@ -11,7 +11,7 @@ def loop():
         print(func(1, 2))
         print(func('1', '2'))
 
-        print(func.lock_dir)
+        print(func.fp(1, 2))
         func.clear()
 
         print(func(1, 2))
