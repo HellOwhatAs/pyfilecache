@@ -52,8 +52,13 @@ class _FileCached:
                     return self.reader(f)
         result = self.user_function(*args, **kwds)
         with self.lock:
-            with open(fidxp, 'wb') as f:
-                self.writer(result, f)
+            flag = True
+            try:
+                with open(fidxp, 'wb') as f:
+                    self.writer(result, f)
+                flag = False
+            finally:
+                if flag: fidxp.unlink(missing_ok=True)
         return result
         
     def fp(self, *args, **kwds):
